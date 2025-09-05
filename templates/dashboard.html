@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Davomat va Topshiriq Nazorati</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #fdf2f8; }
+        .table-container { max-height: 80vh; overflow-y: auto; overflow-x: auto; }
+        table { min-width: 100%; border-collapse: separate; border-spacing: 0; }
+        thead { position: sticky; top: 0; z-index: 20; }
+        th, td { padding: 12px 16px; border: 1px solid #e5e7eb; white-space: nowrap; background-color: #fff; }
+        th { background-color: #f3f4f6; font-weight: 600; }
+        .section-header { background-color: #e2e8f0; font-weight: 700; text-align: center; }
+        .a2-section { background-color: #fef3c7; }
+        .b1-section { background-color: #dbeafe; }
+        .b2-section { background-color: #fce7f3; }
+        .attendance-checkbox { width: 20px; height: 20px; cursor: pointer; accent-color: #10b981; }
+        .input-score { width: 60px; text-align: center; padding: 4px; border-radius: 6px; border: 1px solid #d1d5db; }
+        .input-comment { width: 100px; padding: 4px; border-radius: 6px; border: 1px solid #d1d5db; }
+        .text-center { text-align: center; }
+        .row-warning { background-color: #fecaca !important; }
+        .fixed-column { position: sticky; left: 0; z-index: 15; background-color: #fff; }
+    </style>
+</head>
+<body class="p-6 bg-gray-100">
+<!-- Ensure CSRF cookie exists -->
+<form style="display:none">{% csrf_token %}</form>
+
+<div class="max-w-7xl mx-auto bg-white rounded-xl shadow-lg p-6">
+    <div id="toast" class="hidden fixed top-4 right-4 bg-gray-900 text-white px-4 py-2 rounded shadow z-50"></div>
+    <div class="flex items-center justify-between mb-4">
+        <h1 class="text-2xl font-bold text-gray-800">Talaba Davomat va Topshiriq Nazorati</h1>
+        <div class="text-sm text-gray-600 flex items-center gap-3">
+            <span>Kirish: {{ request.user.username }}</span>
+            <form method="post" action="{% url 'logout' %}">
+                {% csrf_token %}
+                <button type="submit" class="text-indigo-600 hover:underline">Chiqish</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="flex gap-2 mb-3">
+        {% if can_edit %}
+        <button id="btn-add-col" class="px-3 py-2 bg-green-600 text-white rounded">+ Ustun</button>
+        <button id="btn-remove-col" class="px-3 py-2 bg-yellow-600 text-white rounded">- Ustun</button>
+        <button id="btn-clear" class="px-3 py-2 bg-red-600 text-white rounded">Hammasini tozalash</button>
+        <button id="btn-save" class="px-3 py-2 bg-indigo-600 text-white rounded">Saqlash</button>
+        {% endif %}
+    </div>
+
+    <div class="table-container rounded-lg border border-gray-200">
+        <table class="w-full text-sm text-gray-700">
+            <thead>
+                <tr id="main-header-row"></tr>
+                <tr id="date-header-row"></tr>
+                <tr id="sub-header-row"></tr>
+            </thead>
+            <tbody id="a2-table">
+                <tr class="section-header a2-section"><td id="a2-section-colspan">A2 DARJASI</td></tr>
+            </tbody>
+            <tbody id="b1-table">
+                <tr class="section-header b1-section"><td id="b1-section-colspan">B1 DARJASI</td></tr>
+            </tbody>
+            <tbody id="b2-table">
+                <tr class="section-header b2-section"><td id="b2-section-colspan">B2 DARJASI</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const homeworkBonusPerLesson = 2;
+        const maxTestScore = 15;
+        const canEdit = {{ can_edit|yesno:"true,false" }};
+
+        let lessons = [];
+        let students = { A2: [], B1: [], B2: [] };
+        let records = {}; // map studentId -> lessonId -> {attendance, ...}
+
+        const toastEl = document.getElementById('toast');
+        let toastTimer = null;
+        const notify = (msg, cls='bg-gray-900') => {
+            toastEl.textContent = msg;
+            toastEl.className = `fixed top-4 right-4 ${cls} text-white px-4 py-2 rounded shadow z-50`;
+            toastEl.classList.remove('hidden');
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => toastEl.classList.add('hidden'), 2000);
+        };
+
+        const mainHeaderRow = document.getElementById('main-header-row');
+        const dateHeaderRow = document.getElementById('date-header-row');
+        const subHeaderRow = document.getElementById('sub-header-row');
+
+        const renderHeaders = () => {
+            const totalLessons = lessons.length;
+            const totalDynamicCols = totalLessons * 4;
+            const totalTableCols = totalDynamicCols + 5;
+
+            mainHeaderRow.innerHTML = `
+                <th rowspan="3" class="bg-gray-200 text-center font-bold fixed-column">Ism Familiya</th>
+                <th rowspan="3" class="bg-gray-200 text-center font-bold">Daraja</th>
+                <th colspan="${totalDynamicCols}" class="bg-green-100 text-center">Davomat va topshiriqlar</th>
+                <th colspan="3" rowspan="2" class="bg-red-100 text-center">Umumiy natijalar</th>
+                <th rowspan="3" class="bg-purple-100 text-center">Izoh</th>
+            `;
+            dateHeaderRow.innerHTML = lessons.map(h => `<th colspan="4" class="bg-green-100 text-center">${h.title}</th>`).join('');
+            subHeaderRow.innerHTML = Array(totalLessons).fill().map(() => `
+                <th class="bg-green-200">Davomat</th>
+                <th class="bg-green-200">Uy ishi</th>
+                <th class="bg-green-200">Qo'shimcha</th>
+                <th class="bg-green-200">Test (1-${maxTestScore})</th>
+            `).join('') + `
+                <th class="bg-red-100 text-center">Ishtirok %</th>
+                <th class="bg-red-100 text-center">Uy ishi %</th>
+                <th class="bg-red-100 text-center">Umumiy ball</th>
+            `;
+            document.getElementById('a2-section-colspan').setAttribute('colspan', totalTableCols + 1);
+            document.getElementById('b1-section-colspan').setAttribute('colspan', totalTableCols + 1);
+            document.getElementById('b2-section-colspan').setAttribute('colspan', totalTableCols + 1);
+        };
+
+        const createStudentRow = (student) => {
+            const row = document.createElement('tr');
+            row.classList.add('hover:bg-gray-50');
+
+            let dailyCellsHtml = '';
+            for (let i = 0; i < lessons.length; i++) {
+                const lessonId = lessons[i].id;
+                const rec = (records[student.id] && records[student.id][lessonId]) || {};
+                dailyCellsHtml += `
+                    <td class="text-center"><input type="checkbox" ${rec.attendance? 'checked':''} ${!canEdit?'disabled':''} class="attendance-checkbox" data-type="attendance-day" data-lesson-id="${lessonId}"></td>
+                    <td class="text-center"><input type="checkbox" ${rec.homework? 'checked':''} ${!canEdit?'disabled':''} class="attendance-checkbox" data-type="homework-day" data-lesson-id="${lessonId}"></td>
+                    <td class="text-center"><input type="text" value="${rec.extra||''}" ${!canEdit?'disabled':''} class="input-comment" data-type="extra-task-day" data-lesson-id="${lessonId}" placeholder="Izoh..."></td>
+                    <td class="text-center"><input type="number" value="${rec.test_score||0}" ${!canEdit?'disabled':''} class="input-score" data-type="test-score-day" min="0" max="${maxTestScore}" data-lesson-id="${lessonId}"></td>
+                `;
+            }
+
+            row.innerHTML = `
+                <td class="text-left font-medium fixed-column"><input type="text" class="input-comment student-name" value="${student.name||''}" ${!canEdit?'disabled':''} placeholder="Ism Familiya..." data-student-id="${student.id}"/></td>
+                <td class="text-center student-level">${student.level}</td>
+                ${dailyCellsHtml}
+                <td class="text-center present-percent font-bold">0%</td>
+                <td class="text-center homework-percent font-bold">0%</td>
+                <td class="text-center total-score font-bold">0</td>
+                <td><input type="text" class="input-comment text-sm student-note" value="${student.note||''}" ${!canEdit?'disabled':''} placeholder="Izoh..." data-student-id="${student.id}"/></td>
+            `;
+
+            return row;
+        };
+
+        const populateTable = (students, tableId) => {
+            const tableBody = document.getElementById(tableId);
+            students.forEach(student => tableBody.appendChild(createStudentRow(student)));
+        };
+
+        const updateRowCalculations = (row) => {
+            const attendanceCheckboxes = row.querySelectorAll('input[data-type="attendance-day"]');
+            const homeworkCheckboxes = row.querySelectorAll('input[data-type="homework-day"]');
+            const testScoreInputs = row.querySelectorAll('input[data-type="test-score-day"]');
+
+            let presentCount = 0;
+            attendanceCheckboxes.forEach(cb => { if (cb.checked) presentCount++; });
+            const attendancePercentage = ((presentCount / totalLessons) * 100).toFixed(0);
+            row.querySelector('.present-percent').textContent = `${attendancePercentage}%`;
+
+            let homeworkCount = 0;
+            homeworkCheckboxes.forEach(cb => { if (cb.checked) homeworkCount++; });
+            const homeworkPercentage = ((homeworkCount / totalLessons) * 100).toFixed(0);
+            row.querySelector('.homework-percent').textContent = `${homeworkPercentage}%`;
+
+            if (parseInt(attendancePercentage) < 60) row.classList.add('row-warning');
+            else row.classList.remove('row-warning');
+
+            let totalTestScore = 0;
+            testScoreInputs.forEach(input => {
+                let score = parseInt(input.value) || 0;
+                if (score > maxTestScore) { score = maxTestScore; input.value = maxTestScore; }
+                totalTestScore += score;
+            });
+
+            let homeworkBonus = 0;
+            homeworkCheckboxes.forEach(cb => { if (cb.checked) homeworkBonus += homeworkBonusPerLesson; });
+
+            const totalScore = totalTestScore + homeworkBonus;
+            row.querySelector('.total-score').textContent = totalScore;
+        };
+
+        const populateAll = () => {
+            // clear existing rows except headers
+            ['a2-table','b1-table','b2-table'].forEach(id => {
+                const tbody = document.getElementById(id);
+                tbody.querySelectorAll('tr:not(.section-header)').forEach(n => n.remove());
+            });
+            populateTable(students.A2, 'a2-table');
+            populateTable(students.B1, 'b1-table');
+            populateTable(students.B2, 'b2-table');
+            const allRows = document.querySelectorAll('tbody tr:not(.section-header)');
+            allRows.forEach(updateRowCalculations);
+        };
+
+        document.querySelector('.table-container').addEventListener('input', (e) => {
+            const row = e.target.closest('tr');
+            if (row) updateRowCalculations(row);
+        });
+
+        // Load state from backend
+        const csrftoken = (document.cookie.match(/csrftoken=([^;]+)/)||[])[1];
+        const fetchState = async () => {
+            const res = await fetch('/dashboard/state/');
+            const data = await res.json();
+            lessons = data.lessons;
+            students = data.students;
+            records = data.records || {};
+            renderHeaders();
+            populateAll();
+        };
+
+        const buildPayload = () => {
+            const payload = { records: {}, students: [] };
+            const processRow = (row, studentId) => {
+                payload.records[studentId] = payload.records[studentId] || {};
+                lessons.forEach(lesson => {
+                    const lid = lesson.id;
+                    const att = row.querySelector(`input[data-type="attendance-day"][data-lesson-id="${lid}"]`).checked;
+                    const hw = row.querySelector(`input[data-type="homework-day"][data-lesson-id="${lid}"]`).checked;
+                    const ex = row.querySelector(`input[data-type="extra-task-day"][data-lesson-id="${lid}"]`).value;
+                    const ts = parseInt(row.querySelector(`input[data-type="test-score-day"][data-lesson-id="${lid}"]`).value) || 0;
+                    payload.records[studentId][lid] = { attendance: att, homework: hw, extra: ex, test_score: ts };
+                });
+            };
+            document.querySelectorAll('tbody tr:not(.section-header)').forEach(row => {
+                const nameInput = row.querySelector('.student-name');
+                const noteInput = row.querySelector('.student-note');
+                const sid = nameInput.getAttribute('data-student-id');
+                payload.students.push({ id: sid, name: nameInput.value, note: noteInput.value });
+                processRow(row, sid);
+            });
+            return payload;
+        };
+
+        const post = (url, body) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken }, body: JSON.stringify(body||{}) });
+
+        if (canEdit) {
+            document.getElementById('btn-save').addEventListener('click', async (e) => {
+                e.target.disabled = true;
+                const payload = buildPayload();
+                const r = await post('/dashboard/save/', payload);
+                if (r.ok) notify('Saqlandi', 'bg-green-600'); else notify('Xatolik saqlashda', 'bg-red-600');
+                await fetchState();
+                e.target.disabled = false;
+            });
+            document.getElementById('btn-clear').addEventListener('click', async (e) => {
+                if (!confirm('Barcha dars yozuvlari o‘chirilsinmi?')) return;
+                e.target.disabled = true;
+                const r = await post('/dashboard/clear/', {});
+                if (r.ok) notify('Barcha maydonlar tozalandi', 'bg-yellow-600'); else notify('Xatolik tozalashda', 'bg-red-600');
+                await fetchState();
+                e.target.disabled = false;
+            });
+            document.getElementById('btn-add-col').addEventListener('click', async (e) => {
+                e.target.disabled = true;
+                const r = await post('/dashboard/lesson/add/', {});
+                if (r.ok) notify('Ustun qo‘shildi', 'bg-green-600'); else notify('Ustun qo‘shishda xatolik', 'bg-red-600');
+                await fetchState();
+                e.target.disabled = false;
+            });
+            document.getElementById('btn-remove-col').addEventListener('click', async (e) => {
+                e.target.disabled = true;
+                const r = await post('/dashboard/lesson/remove/', {});
+                if (r.ok) {
+                    const data = await r.json();
+                    if (data.status === 'min_reached') notify(`Kamida ${data.min} ta ustun kerak`, 'bg-blue-600');
+                    else notify('Ustun olib tashlandi', 'bg-yellow-600');
+                } else {
+                    notify('Ustun olib tashlashda xatolik', 'bg-red-600');
+                }
+                await fetchState();
+                e.target.disabled = false;
+            });
+        }
+
+        fetchState();
+    });
+</script>
+
+</body>
+</html>

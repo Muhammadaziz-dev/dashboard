@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.Python
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Virtual environments
+env/
+venv/
+.venv/
+
+# Django
+*.log
+staticfiles/
+media/
+db.sqlite3
+
+# IDEs / Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node (if ever used for assets)
+node_modules/
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+
+# Env files
+.env
+.env.*
+
