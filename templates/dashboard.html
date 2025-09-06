@@ -158,18 +158,24 @@
         };
 
         const updateRowCalculations = (row) => {
+            // Ensure we use the current lesson count in calculations
+            const totalLessons = lessons.length || 0;
             const attendanceCheckboxes = row.querySelectorAll('input[data-type="attendance-day"]');
             const homeworkCheckboxes = row.querySelectorAll('input[data-type="homework-day"]');
             const testScoreInputs = row.querySelectorAll('input[data-type="test-score-day"]');
 
             let presentCount = 0;
             attendanceCheckboxes.forEach(cb => { if (cb.checked) presentCount++; });
-            const attendancePercentage = ((presentCount / totalLessons) * 100).toFixed(0);
+            const attendancePercentage = totalLessons > 0
+                ? ((presentCount / totalLessons) * 100).toFixed(0)
+                : '0';
             row.querySelector('.present-percent').textContent = `${attendancePercentage}%`;
 
             let homeworkCount = 0;
             homeworkCheckboxes.forEach(cb => { if (cb.checked) homeworkCount++; });
-            const homeworkPercentage = ((homeworkCount / totalLessons) * 100).toFixed(0);
+            const homeworkPercentage = totalLessons > 0
+                ? ((homeworkCount / totalLessons) * 100).toFixed(0)
+                : '0';
             row.querySelector('.homework-percent').textContent = `${homeworkPercentage}%`;
 
             if (parseInt(attendancePercentage) < 60) row.classList.add('row-warning');
