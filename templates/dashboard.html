@@ -7,22 +7,58 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #fdf2f8; }
+        :root {
+            --bg: #fdf2f8;
+            --panel: #ffffff;
+            --text: #1f2937;
+            --border: #e5e7eb;
+            --th: #f3f4f6;
+            --section: #e2e8f0;
+            --index-col-width: 56px;
+            --name-col-width: 260px;
+        }
+        body { font-family: 'Inter', sans-serif; background-color: var(--bg); color: var(--text); }
         .table-container { max-height: 80vh; overflow-y: auto; overflow-x: auto; }
         table { min-width: 100%; border-collapse: separate; border-spacing: 0; }
         thead { position: sticky; top: 0; z-index: 20; }
-        th, td { padding: 12px 16px; border: 1px solid #e5e7eb; white-space: nowrap; background-color: #fff; }
-        th { background-color: #f3f4f6; font-weight: 600; }
-        .section-header { background-color: #e2e8f0; font-weight: 700; text-align: center; }
+        th, td { padding: 12px 16px; border: 1px solid var(--border); white-space: nowrap; background-color: var(--panel); }
+        th { background-color: var(--th); font-weight: 600; }
+        .section-header { background-color: var(--section); font-weight: 700; text-align: center; }
         .a2-section { background-color: #fef3c7; }
         .b1-section { background-color: #dbeafe; }
         .b2-section { background-color: #fce7f3; }
-        .attendance-checkbox { width: 20px; height: 20px; cursor: pointer; accent-color: #10b981; }
         .input-score { width: 60px; text-align: center; padding: 4px; border-radius: 6px; border: 1px solid #d1d5db; }
-        .input-comment { width: 100px; padding: 4px; border-radius: 6px; border: 1px solid #d1d5db; }
+        .input-comment { width: 140px; padding: 4px; border-radius: 6px; border: 1px solid #d1d5db; }
+        .student-name { width: 240px; }
         .text-center { text-align: center; }
         .row-warning { background-color: #fecaca !important; }
-        .fixed-column { position: sticky; left: 0; z-index: 15; background-color: #fff; }
+        .fixed-column { position: sticky; left: 0; z-index: 15; background-color: var(--panel); }
+        .fixed-column-2 { position: sticky; left: var(--index-col-width); z-index: 15; background-color: var(--panel); }
+        .col-index { width: var(--index-col-width); min-width: var(--index-col-width); max-width: var(--index-col-width); }
+        .col-name { width: var(--name-col-width); min-width: var(--name-col-width); }
+    .att-btn { min-width: 36px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 9999px; padding: 2px 10px; cursor: pointer; font-weight: 600; transition: opacity .08s ease, transform .08s ease, box-shadow .08s ease; }
+        .att-present { background-color: #10b981; color: white; border-color: #059669; }
+        .att-excused { background-color: #f59e0b; color: white; border-color: #d97706; }
+        .att-absent { background-color: #ef4444; color: white; border-color: #dc2626; }
+        .att-empty { background-color: #f3f4f6; color: #374151; }
+        .att-na { opacity: 0.5; pointer-events: none; }
+        /* Ensure attendance buttons remain visible when focused/active/clicked */
+        .att-btn:focus, .att-btn:active {
+            opacity: 1 !important;
+            transform: translateY(0);
+            outline: none;
+            box-shadow: 0 0 0 4px rgba(99,102,241,0.12);
+        }
+        /* When disabled by applicability, keep reduced opacity but still readable */
+        .att-btn.att-na { opacity: 0.55; }
+        /* Level buttons: keep visible on focus/active and remove mobile tap highlight */
+        .level-btn { -webkit-tap-highlight-color: transparent; }
+        .level-btn:focus, .level-btn:active, .level-btn:focus-visible {
+            opacity: 1 !important;
+            box-shadow: 0 6px 18px rgba(99,102,241,0.12), 0 0 0 4px rgba(99,102,241,0.06);
+            transform: translateY(0);
+        }
+        .date-input { width: 140px; }
     </style>
 </head>
 <body class="p-6 bg-gray-100">
@@ -42,13 +78,28 @@
         </div>
     </div>
 
-    <div class="flex gap-2 mb-3">
-        {% if can_edit %}
-        <button id="btn-add-col" class="px-3 py-2 bg-green-600 text-white rounded">+ Ustun</button>
-        <button id="btn-remove-col" class="px-3 py-2 bg-yellow-600 text-white rounded">- Ustun</button>
-        <button id="btn-clear" class="px-3 py-2 bg-red-600 text-white rounded">Hammasini tozalash</button>
-        <button id="btn-save" class="px-3 py-2 bg-indigo-600 text-white rounded">Saqlash</button>
-        {% endif %}
+    <div class="flex flex-wrap items-center gap-2 mb-3">
+    {% if can_edit %}
+    <button id="btn-add-col" class="px-3 py-2 bg-green-600 text-white rounded">+ Ustun</button>
+    {% if is_admin %}
+    <button id="btn-remove-col" class="px-3 py-2 bg-yellow-600 text-white rounded">- Ustun</button>
+    <button id="btn-clear" class="px-3 py-2 bg-red-600 text-white rounded">Hammasini tozalash</button>
+    {% endif %}
+    <button id="btn-save" class="px-3 py-2 bg-indigo-600 text-white rounded">Saqlash</button>
+    {% endif %}
+        <button id="btn-export" class="px-3 py-2 bg-gray-700 text-white rounded">Excelga eksport</button>
+        <div class="ml-auto flex items-center gap-2">
+            <span class="text-sm text-gray-600">Daraja:</span>
+            <div id="level-buttons" class="inline-flex rounded-md shadow-sm" role="group"></div>
+            <input id="search-input" type="text" placeholder="Ism familiya qidirish" class="px-3 py-2 border rounded" />
+            <button id="btn-stats" class="px-3 py-2 rounded bg-blue-600 text-white">Statistika</button>
+            {% if can_edit %}
+            <button id="btn-add-student" class="px-3 py-2 rounded bg-green-700 text-white">+ Talaba</button>
+            {% if is_admin %}
+            <button id="btn-remove-student" class="px-3 py-2 rounded bg-yellow-700 text-white">- Talaba</button>
+            {% endif %}
+            {% endif %}
+        </div>
     </div>
 
     <div class="table-container rounded-lg border border-gray-200">
@@ -75,11 +126,17 @@
     document.addEventListener('DOMContentLoaded', () => {
         const homeworkBonusPerLesson = 2;
         const maxTestScore = 15;
-        const canEdit = {{ can_edit|yesno:"true,false" }};
+    // from Django context: render JS boolean literals
+    const canEdit = {{ can_edit|yesno:"true,false" }};
+    const isAdmin = {{ is_admin|yesno:"true,false" }};
 
         let lessons = [];
         let students = { A2: [], B1: [], B2: [] };
         let records = {}; // map studentId -> lessonId -> {attendance, ...}
+        // expose to window for stats modal
+        window.lessons = lessons;
+        window.students = students;
+        window.records = records;
 
         const toastEl = document.getElementById('toast');
         let toastTimer = null;
@@ -94,20 +151,29 @@
         const mainHeaderRow = document.getElementById('main-header-row');
         const dateHeaderRow = document.getElementById('date-header-row');
         const subHeaderRow = document.getElementById('sub-header-row');
+        const allStudents = () => Object.values(students).flat();
 
         const renderHeaders = () => {
             const totalLessons = lessons.length;
             const totalDynamicCols = totalLessons * 4;
-            const totalTableCols = totalDynamicCols + 5;
+            const totalTableCols = totalDynamicCols + 6;
 
             mainHeaderRow.innerHTML = `
-                <th rowspan="3" class="bg-gray-200 text-center font-bold fixed-column">Ism Familiya</th>
+                <th rowspan="3" class="bg-gray-200 text-center font-bold fixed-column col-index" style="left:0">#</th>
+                <th rowspan="3" class="bg-gray-200 text-center font-bold fixed-column-2 col-name">Ism Familiya</th>
                 <th rowspan="3" class="bg-gray-200 text-center font-bold">Daraja</th>
                 <th colspan="${totalDynamicCols}" class="bg-green-100 text-center">Davomat va topshiriqlar</th>
                 <th colspan="3" rowspan="2" class="bg-red-100 text-center">Umumiy natijalar</th>
                 <th rowspan="3" class="bg-purple-100 text-center">Izoh</th>
             `;
-            dateHeaderRow.innerHTML = lessons.map(h => `<th colspan="4" class="bg-green-100 text-center">${h.title}</th>`).join('');
+            dateHeaderRow.innerHTML = lessons.map(h => `
+                <th colspan="4" class="bg-green-100 text-center">
+                    <div class="flex flex-col items-center gap-1">
+                        <div>${h.title}</div>
+                        ${canEdit ? `<input type="date" class="date-input" data-lesson-id="${h.id}" value="${h.date || ''}">` : `${h.date || ''}`}
+                    </div>
+                </th>
+            `).join('');
             subHeaderRow.innerHTML = Array(totalLessons).fill().map(() => `
                 <th class="bg-green-200">Davomat</th>
                 <th class="bg-green-200">Uy ishi</th>
@@ -118,12 +184,29 @@
                 <th class="bg-red-100 text-center">Uy ishi %</th>
                 <th class="bg-red-100 text-center">Umumiy ball</th>
             `;
-            document.getElementById('a2-section-colspan').setAttribute('colspan', totalTableCols + 1);
-            document.getElementById('b1-section-colspan').setAttribute('colspan', totalTableCols + 1);
-            document.getElementById('b2-section-colspan').setAttribute('colspan', totalTableCols + 1);
+            document.getElementById('a2-section-colspan').setAttribute('colspan', totalTableCols + 2);
+            document.getElementById('b1-section-colspan').setAttribute('colspan', totalTableCols + 2);
+            document.getElementById('b2-section-colspan').setAttribute('colspan', totalTableCols + 2);
         };
 
-        const createStudentRow = (student) => {
+        const attSymbols = { P: '+', E: '−', A: '×', '': '' };
+        const attButtonLabel = (cur) => cur==='P' ? 'Present' : cur==='E' ? 'Excused' : cur==='A' ? 'Absent' : 'Not set';
+        const attButtonClass = (cur) => cur==='P' ? 'att-present' : cur==='E' ? 'att-excused' : cur==='A' ? 'att-absent' : 'att-empty';
+        const nextAttState = (cur) => {
+            if (cur === 'P') return 'E';
+            if (cur === 'E') return 'A';
+            return 'P';
+        };
+        const updateAttBtnUI = (btn) => {
+            const cur = btn.getAttribute('data-value') || '';
+            btn.classList.remove('att-present','att-excused','att-absent','att-empty');
+            btn.classList.add('att-btn', attButtonClass(cur));
+            btn.setAttribute('aria-pressed', cur !== '');
+            btn.setAttribute('aria-label', 'Attendance: ' + attButtonLabel(cur));
+            btn.textContent = attSymbols[cur];
+        };
+
+        const createStudentRow = (student, index) => {
             const row = document.createElement('tr');
             row.classList.add('hover:bg-gray-50');
 
@@ -131,8 +214,9 @@
             for (let i = 0; i < lessons.length; i++) {
                 const lessonId = lessons[i].id;
                 const rec = (records[student.id] && records[student.id][lessonId]) || {};
+                const att = rec.attendance || '';
                 dailyCellsHtml += `
-                    <td class="text-center"><input type="checkbox" ${rec.attendance? 'checked':''} ${!canEdit?'disabled':''} class="attendance-checkbox" data-type="attendance-day" data-lesson-id="${lessonId}"></td>
+                    <td class="text-center"><button type="button" class="att-btn ${attButtonClass(att)}" data-type="attendance-day" data-lesson-id="${lessonId}" data-value="${att}" aria-pressed="${att ? 'true':'false'}" aria-label="Attendance: ${attButtonLabel(att)}" ${!canEdit?'disabled':''}>${attSymbols[att]}</button></td>
                     <td class="text-center"><input type="checkbox" ${rec.homework? 'checked':''} ${!canEdit?'disabled':''} class="attendance-checkbox" data-type="homework-day" data-lesson-id="${lessonId}"></td>
                     <td class="text-center"><input type="text" value="${rec.extra||''}" ${!canEdit?'disabled':''} class="input-comment" data-type="extra-task-day" data-lesson-id="${lessonId}" placeholder="Izoh..."></td>
                     <td class="text-center"><input type="number" value="${rec.test_score||0}" ${!canEdit?'disabled':''} class="input-score" data-type="test-score-day" min="0" max="${maxTestScore}" data-lesson-id="${lessonId}"></td>
@@ -140,7 +224,8 @@
             }
 
             row.innerHTML = `
-                <td class="text-left font-medium fixed-column"><input type="text" class="input-comment student-name" value="${student.name||''}" ${!canEdit?'disabled':''} placeholder="Ism Familiya..." data-student-id="${student.id}"/></td>
+                <td class="text-center font-medium fixed-column col-index" style="left:0">${index}</td>
+                <td class="text-left font-medium fixed-column-2 col-name"><input type="text" class="input-comment student-name" value="${student.name||''}" ${!canEdit?'disabled':''} placeholder="Ism Familiya..." data-student-id="${student.id}"/></td>
                 <td class="text-center student-level">${student.level}</td>
                 ${dailyCellsHtml}
                 <td class="text-center present-percent font-bold">0%</td>
@@ -152,29 +237,84 @@
             return row;
         };
 
-        const populateTable = (students, tableId) => {
+        const createPlaceholderRow = (index) => {
+            const row = document.createElement('tr');
+            row.classList.add('hover:bg-gray-50','placeholder-row');
+            let dailyCellsHtml = '';
+            for (let i = 0; i < lessons.length; i++) {
+                const lessonId = lessons[i].id;
+                dailyCellsHtml += `
+                    <td class="text-center"><button type="button" class="att-btn att-empty" data-type="attendance-day" data-lesson-id="${lessonId}" data-value="" aria-pressed="false" aria-label="Attendance: Not set" disabled>—</button></td>
+                    <td class="text-center"><input type="checkbox" disabled class="attendance-checkbox" data-type="homework-day" data-lesson-id="${lessonId}"></td>
+                    <td class="text-center"><input type="text" value="" disabled class="input-comment" data-type="extra-task-day" data-lesson-id="${lessonId}" placeholder="Izoh..."></td>
+                    <td class="text-center"><input type="number" value="0" disabled class="input-score" data-type="test-score-day" min="0" max="${maxTestScore}" data-lesson-id="${lessonId}"></td>
+                `;
+            }
+            row.innerHTML = `
+                <td class="text-center font-medium fixed-column col-index" style="left:0">${index}</td>
+                <td class="text-left font-medium fixed-column-2 col-name"><input type="text" class="input-comment student-name" value="—" disabled /></td>
+                <td class="text-center student-level">${selectedLevel}</td>
+                ${dailyCellsHtml}
+                <td class="text-center present-percent font-bold">—</td>
+                <td class="text-center homework-percent font-bold">—</td>
+                <td class="text-center total-score font-bold">—</td>
+                <td><input type="text" class="input-comment text-sm student-note" value="" disabled placeholder="Izoh..."/></td>
+            `;
+            return row;
+        };
+
+        const populateTable = (studentsArr, tableId) => {
             const tableBody = document.getElementById(tableId);
-            students.forEach(student => tableBody.appendChild(createStudentRow(student)));
+            studentsArr.forEach((student, idx) => tableBody.appendChild(createStudentRow(student, idx + 1)));
         };
 
         const updateRowCalculations = (row) => {
+            if (row.classList.contains('placeholder-row')) return;
             // Ensure we use the current lesson count in calculations
             const totalLessons = lessons.length || 0;
-            const attendanceCheckboxes = row.querySelectorAll('input[data-type="attendance-day"]');
+            const attButtons = row.querySelectorAll('button[data-type="attendance-day"]');
             const homeworkCheckboxes = row.querySelectorAll('input[data-type="homework-day"]');
             const testScoreInputs = row.querySelectorAll('input[data-type="test-score-day"]');
 
+            // Exclude lessons before student's joined_at if lesson has a date
+            const sid = row.querySelector('.student-name').getAttribute('data-student-id');
+            const studentObj = (Object.values(students).flat()).find(s => String(s.id) === String(sid)) || {};
+            const joinedAt = studentObj.joined_at || null;
+
             let presentCount = 0;
-            attendanceCheckboxes.forEach(cb => { if (cb.checked) presentCount++; });
-            const attendancePercentage = totalLessons > 0
-                ? ((presentCount / totalLessons) * 100).toFixed(0)
+            let applicableLessons = 0;
+            attButtons.forEach(btn => {
+                const lid = btn.getAttribute('data-lesson-id');
+                const lesson = lessons.find(l => String(l.id) === String(lid));
+                const lessonDate = lesson && lesson.date ? lesson.date : null;
+                const applicable = !joinedAt || !lessonDate ? true : (lessonDate >= joinedAt);
+                if (applicable) {
+                    applicableLessons += 1;
+                    const v = btn.getAttribute('data-value');
+                    if (v === 'P') presentCount += 1;
+                }
+            });
+            const denom = applicableLessons > 0 ? applicableLessons : totalLessons;
+            const attendancePercentage = denom > 0
+                ? ((presentCount / denom) * 100).toFixed(0)
                 : '0';
             row.querySelector('.present-percent').textContent = `${attendancePercentage}%`;
 
             let homeworkCount = 0;
-            homeworkCheckboxes.forEach(cb => { if (cb.checked) homeworkCount++; });
-            const homeworkPercentage = totalLessons > 0
-                ? ((homeworkCount / totalLessons) * 100).toFixed(0)
+            let homeworkApplicable = 0;
+            lessons.forEach(lesson => {
+                const lessonDate = lesson && lesson.date ? lesson.date : null;
+                const applicable = !joinedAt || !lessonDate ? true : (lessonDate >= joinedAt);
+                if (!applicable) return;
+                const cb = row.querySelector(`input[data-type="homework-day"][data-lesson-id="${lesson.id}"]`);
+                if (cb) {
+                    homeworkApplicable += 1;
+                    if (cb.checked) homeworkCount += 1;
+                }
+            });
+            const homeworkDenom = homeworkApplicable > 0 ? homeworkApplicable : totalLessons;
+            const homeworkPercentage = homeworkDenom > 0
+                ? ((homeworkCount / homeworkDenom) * 100).toFixed(0)
                 : '0';
             row.querySelector('.homework-percent').textContent = `${homeworkPercentage}%`;
 
@@ -195,23 +335,118 @@
             row.querySelector('.total-score').textContent = totalScore;
         };
 
+        let selectedLevel = 'A2';
+        window.selectedLevel = selectedLevel;
+        const bodyFor = (lvl) => (lvl==='A2' ? 'a2-table' : lvl==='B1' ? 'b1-table' : lvl==='B2' ? 'b2-table' : 'a2-table');
+
+        const setActiveLevelBtn = () => {
+            document.querySelectorAll('.level-btn').forEach(btn => {
+                if (btn.getAttribute('data-level') === selectedLevel) {
+                    btn.classList.add('bg-indigo-600','text-white','border-transparent');
+                } else {
+                    btn.classList.remove('bg-indigo-600','text-white','border-transparent');
+                }
+            });
+        };
+
         const populateAll = () => {
             // clear existing rows except headers
             ['a2-table','b1-table','b2-table'].forEach(id => {
                 const tbody = document.getElementById(id);
                 tbody.querySelectorAll('tr:not(.section-header)').forEach(n => n.remove());
             });
-            populateTable(students.A2, 'a2-table');
-            populateTable(students.B1, 'b1-table');
-            populateTable(students.B2, 'b2-table');
+            // only render current level to reduce DOM size/lag
+            const targetBody = bodyFor(selectedLevel);
+            const studentsForLevel = students[selectedLevel] || [];
+            populateTable(studentsForLevel, targetBody);
+            const tbody = document.getElementById(targetBody);
+            const minRows = 20;
+            if (studentsForLevel.length < minRows) {
+                for (let i = studentsForLevel.length + 1; i <= minRows; i++) {
+                    tbody.appendChild(createPlaceholderRow(i));
+                }
+            }
+            // show/hide tbodys
+            ['a2-table','b1-table','b2-table'].forEach(id => {
+                document.getElementById(id).style.display = (id===targetBody) ? '' : 'none';
+            });
+            // update visible section header title to current level
+            const headerId = targetBody === 'a2-table' ? 'a2-section-colspan' : targetBody === 'b1-table' ? 'b1-section-colspan' : 'b2-section-colspan';
+            const headerEl = document.getElementById(headerId);
+            if (headerEl) headerEl.textContent = `${selectedLevel} DARJASI`;
             const allRows = document.querySelectorAll('tbody tr:not(.section-header)');
             allRows.forEach(updateRowCalculations);
+            setActiveLevelBtn();
+            applySearchFilter();
         };
 
         document.querySelector('.table-container').addEventListener('input', (e) => {
             const row = e.target.closest('tr');
             if (row) updateRowCalculations(row);
         });
+
+        // Tri-state attendance cycling
+        document.querySelector('.table-container').addEventListener('click', (e) => {
+            const btn = e.target.closest('button[data-type="attendance-day"]');
+            if (!btn || !canEdit) return;
+            const cur = btn.getAttribute('data-value') || '';
+            const next = nextAttState(cur);
+            btn.setAttribute('data-value', next);
+            updateAttBtnUI(btn);
+            const row = btn.closest('tr');
+            if (row) updateRowCalculations(row);
+        });
+
+        // Level switchers
+        document.addEventListener('click', (e) => {
+            const btn = e.target.closest('.level-btn');
+            if (!btn) return;
+            selectedLevel = btn.getAttribute('data-level');
+            window.selectedLevel = selectedLevel;
+            renderHeaders();
+            populateAll();
+        });
+
+        // Search by name/surname
+        const searchInput = document.getElementById('search-input');
+        const applySearchFilter = () => {
+            const q = (searchInput.value || '').toLowerCase().trim();
+            const tbodyId = selectedLevel==='A2' ? 'a2-table' : selectedLevel==='B1' ? 'b1-table' : 'b2-table';
+            document.querySelectorAll(`#${tbodyId} tr:not(.section-header)`).forEach(row => {
+                if (row.classList.contains('placeholder-row')) { row.style.display = q === '' ? '' : 'none'; return; }
+                const nameInput = row.querySelector('.student-name');
+                const nameVal = (nameInput && nameInput.value ? nameInput.value : '').toLowerCase();
+                row.style.display = q === '' || nameVal.includes(q) ? '' : 'none';
+            });
+        };
+        searchInput.addEventListener('input', applySearchFilter);
+
+        // Add student to selected level
+        const addStudentBtn = document.getElementById('btn-add-student');
+        if (addStudentBtn && canEdit) {
+            addStudentBtn.addEventListener('click', async () => {
+                const r = await post('/dashboard/student/add/', { level: selectedLevel });
+                if (r.ok) { notify('Talaba qo‘shildi', 'bg-green-600'); await fetchState(); }
+                else { notify('Talaba qo‘shishda xatolik', 'bg-red-600'); }
+            });
+        }
+
+        // Remove student from selected level
+        const removeStudentBtn = document.getElementById('btn-remove-student');
+        if (removeStudentBtn && canEdit && isAdmin) {
+            removeStudentBtn.addEventListener('click', async () => {
+                const r = await post('/dashboard/student/remove/', { level: selectedLevel });
+                if (r.ok) {
+                    const data = await r.json();
+                    if (data.status === 'min_reached') notify('Kamida 1 talaba bo‘lishi kerak', 'bg-blue-600');
+                    else if (data.status === 'removed') notify('Talaba olib tashlandi', 'bg-yellow-600');
+                    else notify('O‘chirish imkoni yo‘q', 'bg-gray-600');
+                    await fetchState();
+                } else {
+                    notify('Talabani o‘chirishda xatolik', 'bg-red-600');
+                }
+            });
+        }
 
         // Load state from backend
         const csrftoken = (document.cookie.match(/csrftoken=([^;]+)/)||[])[1];
@@ -221,8 +456,42 @@
             lessons = data.lessons;
             students = data.students;
             records = data.records || {};
+            // sync globals for stats modal
+            window.lessons = lessons;
+            window.students = students;
+            window.records = records;
+            // Render level buttons dynamically
+            const lb = document.getElementById('level-buttons');
+            lb.innerHTML = '';
+            const order = ['A1','A2','B1','B2','C1','C2'];
+            const keys = Object.keys(students).sort((a,b) => order.indexOf(a) - order.indexOf(b));
+            keys.forEach(k => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'level-btn px-3 py-1.5 text-sm font-medium bg-white text-gray-700 border border-gray-300 rounded-full hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-300 transition-colors';
+                btn.setAttribute('data-level', k);
+                btn.textContent = k;
+                lb.appendChild(btn);
+            });
+            if (!keys.includes(selectedLevel) && keys.length) selectedLevel = keys[0];
+            window.selectedLevel = selectedLevel;
             renderHeaders();
             populateAll();
+            // Disable cells for lessons before student's join date
+            document.querySelectorAll('tbody tr:not(.section-header):not(.placeholder-row)').forEach(row => {
+                const sid = row.querySelector('.student-name').getAttribute('data-student-id');
+                const studentObj = (Object.values(students).flat()).find(s => String(s.id) === String(sid)) || {};
+                const joinedAt = studentObj.joined_at || null;
+                lessons.forEach(lesson => {
+                    const applicable = !joinedAt || !lesson.date ? true : (lesson.date >= joinedAt);
+                    const lid = lesson.id;
+                    const btn = row.querySelector(`button[data-type=\"attendance-day\"][data-lesson-id=\"${lid}\"]`);
+                    const hw = row.querySelector(`input[data-type=\"homework-day\"][data-lesson-id=\"${lid}\"]`);
+                    const ex = row.querySelector(`input[data-type=\"extra-task-day\"][data-lesson-id=\"${lid}\"]`);
+                    const ts = row.querySelector(`input[data-type=\"test-score-day\"][data-lesson-id=\"${lid}\"]`);
+                    [btn, hw, ex, ts].forEach(el => { if (el) { el.disabled = !applicable || !canEdit; if (!applicable) el.classList.add('att-na'); }});
+                });
+            });
         };
 
         const buildPayload = () => {
@@ -231,19 +500,33 @@
                 payload.records[studentId] = payload.records[studentId] || {};
                 lessons.forEach(lesson => {
                     const lid = lesson.id;
-                    const att = row.querySelector(`input[data-type="attendance-day"][data-lesson-id="${lid}"]`).checked;
+                    // Skip lessons before the student's join date (do not overwrite)
+                    const nameInput = row.querySelector('.student-name');
+                    const sidAttr = nameInput.getAttribute('data-student-id');
+                    const stu = (Object.values(students).flat()).find(s => String(s.id)===String(sidAttr)) || {};
+                    const joinedAt = stu.joined_at || null;
+                    const applicable = !joinedAt || !lesson.date ? true : (lesson.date >= joinedAt);
+                    if (!applicable) return;
+
+                    const attEl = row.querySelector(`button[data-type="attendance-day"][data-lesson-id="${lid}"]`);
+                    const att = attEl ? (attEl.getAttribute('data-value') || '') : '';
                     const hw = row.querySelector(`input[data-type="homework-day"][data-lesson-id="${lid}"]`).checked;
                     const ex = row.querySelector(`input[data-type="extra-task-day"][data-lesson-id="${lid}"]`).value;
                     const ts = parseInt(row.querySelector(`input[data-type="test-score-day"][data-lesson-id="${lid}"]`).value) || 0;
                     payload.records[studentId][lid] = { attendance: att, homework: hw, extra: ex, test_score: ts };
                 });
             };
-            document.querySelectorAll('tbody tr:not(.section-header)').forEach(row => {
+            document.querySelectorAll('tbody tr:not(.section-header):not(.placeholder-row)').forEach(row => {
                 const nameInput = row.querySelector('.student-name');
                 const noteInput = row.querySelector('.student-note');
                 const sid = nameInput.getAttribute('data-student-id');
                 payload.students.push({ id: sid, name: nameInput.value, note: noteInput.value });
                 processRow(row, sid);
+            });
+            // include lesson dates
+            payload.lessons = lessons.map(l => {
+                const input = document.querySelector(`input.date-input[data-lesson-id="${l.id}"]`);
+                return { id: l.id, date: input ? input.value : (l.date || null) };
             });
             return payload;
         };
@@ -259,14 +542,31 @@
                 await fetchState();
                 e.target.disabled = false;
             });
-            document.getElementById('btn-clear').addEventListener('click', async (e) => {
-                if (!confirm('Barcha dars yozuvlari o‘chirilsinmi?')) return;
-                e.target.disabled = true;
-                const r = await post('/dashboard/clear/', {});
-                if (r.ok) notify('Barcha maydonlar tozalandi', 'bg-yellow-600'); else notify('Xatolik tozalashda', 'bg-red-600');
-                await fetchState();
-                e.target.disabled = false;
-            });
+            // Clear and remove actions are admin-only; attach handlers only for admins
+            if (isAdmin) {
+                document.getElementById('btn-clear').addEventListener('click', async (e) => {
+                    if (!confirm('Barcha dars yozuvlari o‘chirilsinmi?')) return;
+                    e.target.disabled = true;
+                    const r = await post('/dashboard/clear/', {});
+                    if (r.ok) notify('Barcha maydonlar tozalandi', 'bg-yellow-600'); else notify('Xatolik tozalashda', 'bg-red-600');
+                    await fetchState();
+                    e.target.disabled = false;
+                });
+                document.getElementById('btn-remove-col').addEventListener('click', async (e) => {
+                    e.target.disabled = true;
+                    const r = await post('/dashboard/lesson/remove/', {});
+                    if (r.ok) {
+                        const data = await r.json();
+                        if (data.status === 'min_reached') notify(`Kamida ${data.min} ta ustun kerak`, 'bg-blue-600');
+                        else notify('Ustun olib tashlandi', 'bg-yellow-600');
+                    } else {
+                        notify('Ustun olib tashlashda xatolik', 'bg-red-600');
+                    }
+                    await fetchState();
+                    e.target.disabled = false;
+                });
+            }
+            // Add column (available to teachers/admins)
             document.getElementById('btn-add-col').addEventListener('click', async (e) => {
                 e.target.disabled = true;
                 const r = await post('/dashboard/lesson/add/', {});
@@ -274,23 +574,111 @@
                 await fetchState();
                 e.target.disabled = false;
             });
-            document.getElementById('btn-remove-col').addEventListener('click', async (e) => {
-                e.target.disabled = true;
-                const r = await post('/dashboard/lesson/remove/', {});
-                if (r.ok) {
-                    const data = await r.json();
-                    if (data.status === 'min_reached') notify(`Kamida ${data.min} ta ustun kerak`, 'bg-blue-600');
-                    else notify('Ustun olib tashlandi', 'bg-yellow-600');
-                } else {
-                    notify('Ustun olib tashlashda xatolik', 'bg-red-600');
-                }
-                await fetchState();
-                e.target.disabled = false;
-            });
         }
+
+        // Export to Excel/CSV
+        document.getElementById('btn-export').addEventListener('click', () => {
+            window.location.href = '/dashboard/export/';
+        });
 
         fetchState();
     });
+</script>
+
+<!-- Statistics Modal -->
+<div id="stats-modal" class="hidden fixed inset-0 bg-black/50 z-50 items-center justify-center p-4">
+  <div class="bg-white rounded shadow-xl max-w-xl w-full p-4">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="text-lg font-semibold">Statistika</h3>
+      <button id="stats-close" class="text-gray-500 hover:text-gray-800">✕</button>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+      <div>
+        <label class="block text-sm font-medium mb-1">Daraja</label>
+        <select id="stats-level" class="w-full border rounded px-2 py-1"></select>
+      </div>
+      <div class="md:col-span-2">
+        <label class="block text-sm font-medium mb-1">Talaba qidirish</label>
+        <input id="stats-search" type="text" class="w-full border rounded px-2 py-1" placeholder="Ism familiya..." />
+      </div>
+    </div>
+    <div class="mb-3">
+      <label class="block text-sm font-medium mb-1">Talaba</label>
+      <select id="stats-student" class="w-full border rounded px-2 py-2"></select>
+    </div>
+    <div id="stats-results" class="grid grid-cols-2 gap-3 text-sm"></div>
+  </div>
+</div>
+
+<script>
+  // Stats modal logic
+  (function(){
+    const modal = document.getElementById('stats-modal');
+    const openBtn = document.getElementById('btn-stats');
+    const closeBtn = document.getElementById('stats-close');
+    const levelSel = document.getElementById('stats-level');
+    const searchInp = document.getElementById('stats-search');
+    const studentSel = document.getElementById('stats-student');
+    const resultsEl = document.getElementById('stats-results');
+
+    const open = () => { modal.classList.remove('hidden'); modal.classList.add('flex');
+      // Populate levels dynamically
+      const order = ['A1','A2','B1','B2','C1','C2'];
+      const keys = Object.keys(window.students || {}).sort((a,b) => order.indexOf(a) - order.indexOf(b));
+      levelSel.innerHTML = keys.map(k => `<option value="${k}">${k}</option>`).join('');
+      // Preselect current selectedLevel if exists
+      if (keys.includes(window.selectedLevel)) levelSel.value = window.selectedLevel;
+      refreshStudents();
+    };
+    const close = () => { modal.classList.add('hidden'); modal.classList.remove('flex'); };
+    openBtn.addEventListener('click', open);
+    closeBtn.addEventListener('click', close);
+    modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+
+    function refreshStudents(){
+      const lvl = levelSel.value;
+      const q = (searchInp.value||'').toLowerCase().trim();
+      const arr = ((window.students||{})[lvl] || []);
+      const filtered = arr.filter(s => (s.name||'').toLowerCase().includes(q));
+      studentSel.innerHTML = filtered.map(s => `<option value="${s.id}">${s.name||'—'} (${s.level})</option>`).join('');
+      renderStudentStats();
+    }
+
+    function renderStudentStats(){
+      const sid = studentSel.value;
+      if (!sid) { resultsEl.innerHTML=''; return; }
+      // compute over lessons ≥ joined_at
+      const stu = (Object.values(window.students||{}).flat()).find(s => String(s.id)===String(sid));
+      const joinedAt = stu && stu.joined_at ? stu.joined_at : null;
+
+      let total=0, present=0, excused=0, absent=0, hwYes=0, testSum=0;
+      (window.lessons||[]).forEach(l => {
+        const applicable = !joinedAt || !l.date ? true : (l.date >= joinedAt);
+        if (!applicable) return;
+        total += 1;
+        const rec = ((window.records||{})[stu.id]||{})[l.id] || {};
+        const a = rec.attendance || '';
+        if (a==='P') present+=1; else if (a==='E') excused+=1; else if (a==='A') absent+=1;
+        if (rec.homework) hwYes+=1;
+        testSum += parseInt(rec.test_score||0) || 0;
+      });
+      const attPerc = total>0 ? Math.round((present/total)*100) : 0;
+      const hwPerc = total>0 ? Math.round((hwYes/total)*100) : 0;
+      resultsEl.innerHTML = `
+        <div><span class="font-semibold">Jami darslar:</span> ${total}</div>
+        <div><span class="font-semibold">Ishtirok (+):</span> ${present}</div>
+        <div><span class="font-semibold">Sababli (−):</span> ${excused}</div>
+        <div><span class="font-semibold">Sababsiz (×):</span> ${absent}</div>
+        <div><span class="font-semibold">Davomat %:</span> ${attPerc}%</div>
+        <div><span class="font-semibold">Uy ishi %:</span> ${hwPerc}%</div>
+        <div><span class="font-semibold">Test yig‘indi:</span> ${testSum}</div>
+      `;
+    }
+
+    levelSel.addEventListener('change', refreshStudents);
+    searchInp.addEventListener('input', refreshStudents);
+    studentSel.addEventListener('change', renderStudentStats);
+  })();
 </script>
 
 </body>

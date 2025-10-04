@@ -3,8 +3,10 @@
 A Django-based dashboard with:
 - Custom user model with roles (ADMIN, TEACHER, STUDENT)
 - Session-login pages (`/login`, `/logout`), dashboard at `/`
-- Persistent lessons, students, and per-lesson records
-- Role-gated editing (ADMIN/TEACHER only): add/remove columns, clear all, save
+- Persistent lessons, students, and per-lesson records (attendance now tri-state: + present, − excused, × absent)
+- Role-gated editing (ADMIN/TEACHER only): add/remove columns, edit lesson dates, clear all, save
+- Export to Excel (or CSV fallback): `/dashboard/export/`
+- Light/Dark mode toggle in UI (🌗)
 - JWT auth endpoints for APIs (optional): `/api/auth/token/`, `/api/auth/token/refresh/`
 
 ## Prerequisites
@@ -59,13 +61,14 @@ Open `http://127.0.0.1:8000/login` to log in. After login you’ll be redirected
 - Admin site: `/admin/`
 
 ## API (Session-protected dashboard endpoints)
-- GET `/dashboard/state/` → returns lessons, students (grouped A2/B1/B2), and records
-- POST `/dashboard/save/` → bulk save table changes
+- GET `/dashboard/state/` → returns lessons (with optional dates), students (grouped A2/B1/B2, with `joined_at`), and records
+- POST `/dashboard/save/` → bulk save table changes (including lesson dates)
 - POST `/dashboard/clear/` → clears all records and student names/notes
 - POST `/dashboard/lesson/add/` → adds one lesson column
 - POST `/dashboard/lesson/remove/` → removes the last column (keeps a minimum of 3)
 
 These endpoints require being logged-in via Django session. CSRF is handled by the page template.
+Excel export requires `openpyxl` (added to `requirements.txt`); if not available, the server returns CSV.
 
 ## JWT Auth (optional)
 - POST `/api/auth/token/` with `{ "username": "..", "password": ".." }`
@@ -76,6 +79,11 @@ These are present for API clients but are not used by the dashboard UI (which us
 ## Roles and Permissions
 - Only `ADMIN` or `TEACHER` (or superuser) can edit the dashboard.
 - Others can view but inputs are disabled.
+
+## Attendance and Join Dates
+- Attendance is tri-state: `+` (present), `−` (excused), `×` (absent).
+- Lessons can have calendar dates set in the header row (admins/teachers only).
+- Students carry a `joined_at` date; for statistics and editing, lessons before a student's join date are disabled and excluded from percentages.
 
 ## Troubleshooting
 - Cannot login to admin: ensure your superuser is `is_staff=True` (the code ensures this for superuser/ADMIN role). Recreate via `createsuperuser` if needed.

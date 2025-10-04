@@ -20,7 +20,7 @@ class UserSerializer(serializers.ModelSerializer):
 class LessonSerializer(serializers.ModelSerializer):
     class Meta:
         model = Lesson
-        fields = ["id", "title", "order"]
+        fields = ["id", "title", "order", "date"]
 
 
 class RecordSerializer(serializers.ModelSerializer):
@@ -32,7 +32,7 @@ class RecordSerializer(serializers.ModelSerializer):
 class StudentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Student
-        fields = ["id", "name", "level", "note"]
+        fields = ["id", "name", "level", "note", "joined_at"]
 
 
 class DashboardStateSerializer(serializers.Serializer):
