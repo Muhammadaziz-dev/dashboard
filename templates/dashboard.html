@@ -109,6 +109,12 @@
                 <tr id="date-header-row"></tr>
                 <tr id="sub-header-row"></tr>
             </thead>
+            <tbody id="a0-table">
+                <tr class="section-header a0-section"><td id="a0-section-colspan">A0 DARJASI</td></tr>
+            </tbody>
+            <tbody id="a1-table">
+                <tr class="section-header a1-section"><td id="a1-section-colspan">A1 DARJASI</td></tr>
+            </tbody>
             <tbody id="a2-table">
                 <tr class="section-header a2-section"><td id="a2-section-colspan">A2 DARJASI</td></tr>
             </tbody>
@@ -117,6 +123,9 @@
             </tbody>
             <tbody id="b2-table">
                 <tr class="section-header b2-section"><td id="b2-section-colspan">B2 DARJASI</td></tr>
+            </tbody>
+            <tbody id="c1-table">
+                <tr class="section-header c1-section"><td id="c1-section-colspan">C1 DARJASI</td></tr>
             </tbody>
         </table>
     </div>
@@ -131,7 +140,7 @@
     const isAdmin = {{ is_admin|yesno:"true,false" }};
 
         let lessons = [];
-        let students = { A2: [], B1: [], B2: [] };
+            let students = { A0: [], A1: [], A2: [], B1: [], B2: [], C1: [] };
         let records = {}; // map studentId -> lessonId -> {attendance, ...}
         // expose to window for stats modal
         window.lessons = lessons;
@@ -184,9 +193,11 @@
                 <th class="bg-red-100 text-center">Uy ishi %</th>
                 <th class="bg-red-100 text-center">Umumiy ball</th>
             `;
-            document.getElementById('a2-section-colspan').setAttribute('colspan', totalTableCols + 2);
-            document.getElementById('b1-section-colspan').setAttribute('colspan', totalTableCols + 2);
-            document.getElementById('b2-section-colspan').setAttribute('colspan', totalTableCols + 2);
+                // update colspan for all level section headers
+                ['a0','a1','a2','b1','b2','c1'].forEach(prefix => {
+                    const el = document.getElementById(`${prefix}-section-colspan`);
+                    if (el) el.setAttribute('colspan', totalTableCols + 2);
+                });
         };
 
         const attSymbols = { P: '+', E: '−', A: '×', '': '' };
@@ -335,9 +346,8 @@
             row.querySelector('.total-score').textContent = totalScore;
         };
 
-        let selectedLevel = 'A2';
-        window.selectedLevel = selectedLevel;
-        const bodyFor = (lvl) => (lvl==='A2' ? 'a2-table' : lvl==='B1' ? 'b1-table' : lvl==='B2' ? 'b2-table' : 'a2-table');
+    let selectedLevel = 'A0';
+    window.selectedLevel = selectedLevel;
 
         const setActiveLevelBtn = () => {
             document.querySelectorAll('.level-btn').forEach(btn => {
@@ -351,33 +361,50 @@
 
         const populateAll = () => {
             // clear existing rows except headers
-            ['a2-table','b1-table','b2-table'].forEach(id => {
-                const tbody = document.getElementById(id);
-                tbody.querySelectorAll('tr:not(.section-header)').forEach(n => n.remove());
-            });
+                ['a0-table','a1-table','a2-table','b1-table','b2-table','c1-table'].forEach(id => {
+                    const tbody = document.getElementById(id);
+                    if (!tbody) return;
+                    tbody.querySelectorAll('tr:not(.section-header)').forEach(n => n.remove());
+                });
             // only render current level to reduce DOM size/lag
             const targetBody = bodyFor(selectedLevel);
             const studentsForLevel = students[selectedLevel] || [];
             populateTable(studentsForLevel, targetBody);
             const tbody = document.getElementById(targetBody);
-            const minRows = 20;
+                const minRows = 30;
             if (studentsForLevel.length < minRows) {
                 for (let i = studentsForLevel.length + 1; i <= minRows; i++) {
                     tbody.appendChild(createPlaceholderRow(i));
                 }
             }
             // show/hide tbodys
-            ['a2-table','b1-table','b2-table'].forEach(id => {
-                document.getElementById(id).style.display = (id===targetBody) ? '' : 'none';
-            });
+                ['a0-table','a1-table','a2-table','b1-table','b2-table','c1-table'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.style.display = (id===targetBody) ? '' : 'none';
+                });
             // update visible section header title to current level
-            const headerId = targetBody === 'a2-table' ? 'a2-section-colspan' : targetBody === 'b1-table' ? 'b1-section-colspan' : 'b2-section-colspan';
+                const headerMap = {
+                    'a0-table': 'a0-section-colspan', 'a1-table': 'a1-section-colspan', 'a2-table': 'a2-section-colspan',
+                    'b1-table': 'b1-section-colspan', 'b2-table': 'b2-section-colspan', 'c1-table': 'c1-section-colspan'
+                };
+                const headerId = headerMap[targetBody];
             const headerEl = document.getElementById(headerId);
             if (headerEl) headerEl.textContent = `${selectedLevel} DARJASI`;
             const allRows = document.querySelectorAll('tbody tr:not(.section-header)');
             allRows.forEach(updateRowCalculations);
             setActiveLevelBtn();
             applySearchFilter();
+        };
+        const bodyFor = (lvl) => {
+            switch(lvl) {
+                case 'A0': return 'a0-table';
+                case 'A1': return 'a1-table';
+                case 'A2': return 'a2-table';
+                case 'B1': return 'b1-table';
+                case 'B2': return 'b2-table';
+                case 'C1': return 'c1-table';
+                default: return 'a0-table';
+            }
         };
 
         document.querySelector('.table-container').addEventListener('input', (e) => {
@@ -411,7 +438,7 @@
         const searchInput = document.getElementById('search-input');
         const applySearchFilter = () => {
             const q = (searchInput.value || '').toLowerCase().trim();
-            const tbodyId = selectedLevel==='A2' ? 'a2-table' : selectedLevel==='B1' ? 'b1-table' : 'b2-table';
+            const tbodyId = bodyFor(selectedLevel);
             document.querySelectorAll(`#${tbodyId} tr:not(.section-header)`).forEach(row => {
                 if (row.classList.contains('placeholder-row')) { row.style.display = q === '' ? '' : 'none'; return; }
                 const nameInput = row.querySelector('.student-name');
@@ -463,7 +490,7 @@
             // Render level buttons dynamically
             const lb = document.getElementById('level-buttons');
             lb.innerHTML = '';
-            const order = ['A1','A2','B1','B2','C1','C2'];
+                const order = ['A0','A1','A2','B1','B2','C1'];
             const keys = Object.keys(students).sort((a,b) => order.indexOf(a) - order.indexOf(b));
             keys.forEach(k => {
                 const btn = document.createElement('button');
@@ -623,7 +650,7 @@
 
     const open = () => { modal.classList.remove('hidden'); modal.classList.add('flex');
       // Populate levels dynamically
-      const order = ['A1','A2','B1','B2','C1','C2'];
+    const order = ['A0','A1','A2','B1','B2','C1'];
       const keys = Object.keys(window.students || {}).sort((a,b) => order.indexOf(a) - order.indexOf(b));
       levelSel.innerHTML = keys.map(k => `<option value="${k}">${k}</option>`).join('');
       // Preselect current selectedLevel if exists

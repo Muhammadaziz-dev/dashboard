@@ -37,12 +37,12 @@ class Lesson(models.Model):
 
 class Student(models.Model):
     class Levels(models.TextChoices):
+        A0 = 'A0', 'A0'
         A1 = 'A1', 'A1'
         A2 = 'A2', 'A2'
         B1 = 'B1', 'B1'
         B2 = 'B2', 'B2'
         C1 = 'C1', 'C1'
-        C2 = 'C2', 'C2'
 
     name = models.CharField(max_length=120, blank=True, default="")
     level = models.CharField(max_length=2, choices=Levels.choices)

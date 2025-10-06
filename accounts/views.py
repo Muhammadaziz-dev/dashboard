@@ -63,20 +63,18 @@ class DashboardStateView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # Seed defaults on first run: 24 lessons and 30 students for each level
+        # Seed defaults on first run: 24 lessons for all levels and 30 students per level
         if Lesson.objects.count() == 0:
             today = date.today()
+            # create 24 lessons for each level (lessons can be shared or per-level depending on design)
             for i in range(24):
-                # default sequential dates as today + i for convenience
                 Lesson.objects.create(title=f"{i+1}-dars", order=i, date=today)
-        # Ensure minimum rows per level
-        # Keep compatibility: A2/B1/B2 seeded to 30 on first run; A1/C1/C2 ensure at least 1 row exists
-        for level in [Student.Levels.A2, Student.Levels.B1, Student.Levels.B2]:
-            if not Student.objects.filter(level=level).exists():
-                Student.objects.bulk_create([Student(level=level, name="") for _ in range(30)])
-        for level in [Student.Levels.A1, Student.Levels.C1, Student.Levels.C2]:
-            if not Student.objects.filter(level=level).exists():
-                Student.objects.create(level=level, name="")
+        # Ensure minimum rows per level: 30 students per level
+        level_keys = [choice[0] for choice in Student.Levels.choices]
+        for level in level_keys:
+            qs = Student.objects.filter(level=level)
+            if qs.count() < 30:
+                Student.objects.bulk_create([Student(level=level, name="") for _ in range(30 - qs.count())])
 
         lessons = Lesson.objects.all()
         # Group students by all defined levels dynamically
@@ -223,13 +221,13 @@ class StudentRemoveView(APIView):
         levels = [c[0] for c in Student.Levels.choices]
         if level not in levels:
             return Response({"error": "invalid_level", "levels": levels}, status=400)
-        # Do not remove if it would drop below 1 row for A1/C1/C2, or 0 for others
+        # Do not remove if it would drop below minimum per-level (we enforce 30)
         qs = Student.objects.filter(level=level).order_by('-id')
         if not qs.exists():
             return Response({"status": "noop"})
-        # Keep at least 1 student per level
-        if qs.count() <= 1:
-            return Response({"status": "min_reached", "min": 1})
+        # Keep at least 30 students per level
+        if qs.count() <= 30:
+            return Response({"status": "min_reached", "min": 30})
         stu = qs.first()
         stu.delete()
         return Response({"status": "removed"})
