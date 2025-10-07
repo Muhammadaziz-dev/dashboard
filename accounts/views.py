@@ -115,20 +115,41 @@ class DashboardSaveView(APIView):
         #   lessons: [ {id,date} ]
         # }
         records = payload.get('records', {})
-        # Upsert records
+        # Upsert records: only create/update when there is meaningful data.
+        # If payload for a student/lesson is completely empty, delete any existing record instead of creating a default 'A'.
         for sid, lessons in records.items():
             for lid, r in lessons.items():
-                obj, _ = Record.objects.get_or_create(student_id=sid, lesson_id=lid)
-                # Normalize attendance to valid choices: 'P','E','A'
                 data = dict(r)
-                att = data.get('attendance', 'A')
+                # Normalize attendance but allow empty string for detection
+                att = data.get('attendance', '')
                 if isinstance(att, bool):
-                    att = 'P' if att else 'A'
-                if att in (None, ''):
+                    att = 'P' if att else ''
+                if att not in ('P', 'E', 'A'):
+                    att = ''
+                hw = bool(data.get('homework'))
+                extra = (data.get('extra') or '').strip()
+                try:
+                    test_score = int(data.get('test_score') or 0)
+                except Exception:
+                    test_score = 0
+
+                has_data = (att in ('P', 'E', 'A')) or hw or (extra != '') or (test_score > 0)
+
+                if not has_data:
+                    # remove existing record if present; don't create a new empty record
+                    Record.objects.filter(student_id=sid, lesson_id=lid).delete()
+                    continue
+
+                # If we have other data but attendance is empty, default to 'A' (absent)
+                if att == '':
                     att = 'A'
-                if att not in ('P','E','A'):
-                    att = 'A'
+
                 data['attendance'] = att
+                data['homework'] = hw
+                data['extra'] = extra
+                data['test_score'] = test_score
+
+                obj, _ = Record.objects.get_or_create(student_id=sid, lesson_id=lid)
                 ser = RecordSerializer(instance=obj, data=data, partial=True)
                 ser.is_valid(raise_exception=True)
                 ser.save()

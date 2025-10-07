@@ -537,10 +537,13 @@
 
                     const attEl = row.querySelector(`button[data-type="attendance-day"][data-lesson-id="${lid}"]`);
                     const att = attEl ? (attEl.getAttribute('data-value') || '') : '';
-                    const hw = row.querySelector(`input[data-type="homework-day"][data-lesson-id="${lid}"]`).checked;
-                    const ex = row.querySelector(`input[data-type="extra-task-day"][data-lesson-id="${lid}"]`).value;
+                    const hw = !!row.querySelector(`input[data-type="homework-day"][data-lesson-id="${lid}"]`).checked;
+                    const ex = (row.querySelector(`input[data-type="extra-task-day"][data-lesson-id="${lid}"]`).value || '').trim();
                     const ts = parseInt(row.querySelector(`input[data-type="test-score-day"][data-lesson-id="${lid}"]`).value) || 0;
-                    payload.records[studentId][lid] = { attendance: att, homework: hw, extra: ex, test_score: ts };
+                    // Only include if there's meaningful data; otherwise skip to avoid creating empty records
+                    if (att || hw || ex !== '' || ts > 0) {
+                        payload.records[studentId][lid] = { attendance: att, homework: hw, extra: ex, test_score: ts };
+                    }
                 });
             };
             document.querySelectorAll('tbody tr:not(.section-header):not(.placeholder-row)').forEach(row => {
