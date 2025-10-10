@@ -142,6 +142,7 @@
         let lessons = [];
             let students = { A0: [], A1: [], A2: [], B1: [], B2: [], C1: [] };
         let records = {}; // map studentId -> lessonId -> {attendance, ...}
+        let saving = false;
         // expose to window for stats modal
         window.lessons = lessons;
         window.students = students;
@@ -483,6 +484,12 @@
             lessons = data.lessons;
             students = data.students;
             records = data.records || {};
+            // Ensure stable ordering by sorting each level by numeric id
+            Object.keys(students).forEach(k => {
+                if (Array.isArray(students[k])) {
+                    students[k].sort((a,b) => (parseInt(a.id,10)||0) - (parseInt(b.id,10)||0));
+                }
+            });
             // sync globals for stats modal
             window.lessons = lessons;
             window.students = students;
@@ -565,12 +572,21 @@
 
         if (canEdit) {
             document.getElementById('btn-save').addEventListener('click', async (e) => {
-                e.target.disabled = true;
-                const payload = buildPayload();
-                const r = await post('/dashboard/save/', payload);
-                if (r.ok) notify('Saqlandi', 'bg-green-600'); else notify('Xatolik saqlashda', 'bg-red-600');
-                await fetchState();
-                e.target.disabled = false;
+                if (saving) return;
+                saving = true;
+                const btn = e.target;
+                btn.disabled = true;
+                try {
+                    const payload = buildPayload();
+                    const r = await post('/dashboard/save/', payload);
+                    if (r.ok) notify('Saqlandi', 'bg-green-600'); else notify('Xatolik saqlashda', 'bg-red-600');
+                    await fetchState();
+                } catch (err) {
+                    notify('Xatolik saqlashda', 'bg-red-600');
+                } finally {
+                    btn.disabled = false;
+                    saving = false;
+                }
             });
             // Clear and remove actions are admin-only; attach handlers only for admins
             if (isAdmin) {
