@@ -343,7 +343,7 @@
             let homeworkBonus = 0;
             homeworkCheckboxes.forEach(cb => { if (cb.checked) homeworkBonus += homeworkBonusPerLesson; });
 
-            const totalScore = totalTestScore + homeworkBonus;
+            const totalScore = totalTestScore;
             row.querySelector('.total-score').textContent = totalScore;
         };
 
