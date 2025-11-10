@@ -220,6 +220,8 @@
 
         const createStudentRow = (student, index) => {
             const row = document.createElement('tr');
+            // mark as a real student row
+            row.setAttribute('data-real', '1');
             row.classList.add('hover:bg-gray-50');
 
             let dailyCellsHtml = '';
@@ -251,6 +253,8 @@
 
         const createPlaceholderRow = (index) => {
             const row = document.createElement('tr');
+            // mark as placeholder (not a real student)
+            row.setAttribute('data-real', '0');
             row.classList.add('hover:bg-gray-50','placeholder-row');
             let dailyCellsHtml = '';
             for (let i = 0; i < lessons.length; i++) {
@@ -372,12 +376,6 @@
             const studentsForLevel = students[selectedLevel] || [];
             populateTable(studentsForLevel, targetBody);
             const tbody = document.getElementById(targetBody);
-                const minRows = 30;
-            if (studentsForLevel.length < minRows) {
-                for (let i = studentsForLevel.length + 1; i <= minRows; i++) {
-                    tbody.appendChild(createPlaceholderRow(i));
-                }
-            }
             // show/hide tbodys
                 ['a0-table','a1-table','a2-table','b1-table','b2-table','c1-table'].forEach(id => {
                     const el = document.getElementById(id);
@@ -433,6 +431,16 @@
             window.selectedLevel = selectedLevel;
             renderHeaders();
             populateAll();
+            try {
+                // Debug: report counts to help diagnose placeholder vs real row rendering
+                const counts = Object.keys(students || {}).reduce((acc,k) => { acc[k] = (students[k]||[]).length; return acc; }, {});
+                const tbodyId = bodyFor(selectedLevel);
+                const renderedRows = document.querySelectorAll(`#${tbodyId} tr:not(.section-header)`).length;
+                const placeholderRows = document.querySelectorAll(`#${tbodyId} tr.placeholder-row`).length;
+                console.debug('fetchState: lessons=', lessons.length, 'selectedLevel=', selectedLevel, 'studentCounts=', counts, 'renderedRows=', renderedRows, 'placeholderRows=', placeholderRows);
+                // log first few students for selected level
+                console.debug('students sample', (students[selectedLevel]||[]).slice(0,6));
+            } catch (err) { /* ignore logging errors */ }
         });
 
         // Search by name/surname
@@ -454,8 +462,28 @@
         if (addStudentBtn && canEdit) {
             addStudentBtn.addEventListener('click', async () => {
                 const r = await post('/dashboard/student/add/', { level: selectedLevel });
-                if (r.ok) { notify('Talaba qo‘shildi', 'bg-green-600'); await fetchState(); }
-                else { notify('Talaba qo‘shishda xatolik', 'bg-red-600'); }
+                if (r.ok) {
+                    let newStudent = null;
+                    try { newStudent = await r.json(); console.debug('Student add response', newStudent); } catch (err) { /* ignore */ }
+                    notify('Talaba qo‘shildi', 'bg-green-600');
+                    await fetchState();
+                    // If server returned the new student id, focus its name input so user can immediately edit
+                    try {
+                        const nid = newStudent && newStudent.id ? String(newStudent.id) : null;
+                        if (nid) {
+                            const sel = document.querySelector(`input.student-name[data-student-id="${nid}"]`);
+                            if (sel) { sel.disabled = false; sel.focus(); sel.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+                        } else {
+                            // fallback: focus the last visible student input in the selected level
+                            const tbody = document.getElementById(bodyFor(selectedLevel));
+                            if (tbody) {
+                                const inputs = tbody.querySelectorAll('input.student-name:not([disabled])');
+                                const last = inputs[inputs.length-1];
+                                if (last) { last.focus(); last.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+                            }
+                        }
+                    } catch (err) { /* ignore focus errors */ }
+                } else { notify('Talaba qo‘shishda xatolik', 'bg-red-600'); }
             });
         }
 
@@ -511,11 +539,37 @@
             window.selectedLevel = selectedLevel;
             renderHeaders();
             populateAll();
+            // After populating, ensure dynamically-created inputs/buttons are enabled for real student rows
+            // and update attendance button UI/state. This helps newly-added rows (31,32,...) be editable immediately.
+            document.querySelectorAll('tbody tr[data-real="1"]').forEach(row => {
+                const nameInput = row.querySelector('.student-name');
+                if (!nameInput) return;
+                const sid = nameInput.getAttribute('data-student-id');
+                if (!sid) return; // skip non-student rows
+                // Initialize attendance buttons and enable inputs for editable mode
+                row.querySelectorAll('button[data-type="attendance-day"]').forEach(btn => {
+                    btn.disabled = !canEdit ? true : false;
+                    try { updateAttBtnUI(btn); } catch (err) { /* ignore */ }
+                });
+                row.querySelectorAll('input').forEach(inp => {
+                    // Enable only if user can edit; applicability check below will further disable if needed
+                    inp.disabled = !canEdit ? true : false;
+                });
+                try { updateRowCalculations(row); } catch (err) { /* ignore */ }
+            });
+
             // Disable cells for lessons before student's join date
-            document.querySelectorAll('tbody tr:not(.section-header):not(.placeholder-row)').forEach(row => {
+            const today = new Date().toISOString().split('T')[0];
+            document.querySelectorAll('tbody tr[data-real="1"]').forEach(row => {
                 const sid = row.querySelector('.student-name').getAttribute('data-student-id');
                 const studentObj = (Object.values(students).flat()).find(s => String(s.id) === String(sid)) || {};
                 const joinedAt = studentObj.joined_at || null;
+
+                // If student joined today, skip the date-based disabling logic for them.
+                if (joinedAt === today) {
+                    return;
+                }
+
                 lessons.forEach(lesson => {
                     const applicable = !joinedAt || !lesson.date ? true : (lesson.date >= joinedAt);
                     const lid = lesson.id;
@@ -530,41 +584,84 @@
 
         const buildPayload = () => {
             const payload = { records: {}, students: [] };
+            const allStudentsFlat = (Object.values(students).flat()) || [];
+            const today = new Date().toISOString().split('T')[0];
+
             const processRow = (row, studentId) => {
-                payload.records[studentId] = payload.records[studentId] || {};
+                let foundAny = false;
                 lessons.forEach(lesson => {
                     const lid = lesson.id;
                     // Skip lessons before the student's join date (do not overwrite)
-                    const nameInput = row.querySelector('.student-name');
-                    const sidAttr = nameInput.getAttribute('data-student-id');
-                    const stu = (Object.values(students).flat()).find(s => String(s.id)===String(sidAttr)) || {};
+                    const sidAttr = studentId;
+                    const stu = allStudentsFlat.find(s => String(s.id) === String(sidAttr)) || {};
                     const joinedAt = stu.joined_at || null;
-                    const applicable = !joinedAt || !lesson.date ? true : (lesson.date >= joinedAt);
+
+                    // For students who joined today, always consider lessons applicable for saving.
+                    const isNewStudent = joinedAt === today;
+                    const applicable = isNewStudent || !joinedAt || !lesson.date ? true : (lesson.date >= joinedAt);
+
                     if (!applicable) return;
 
                     const attEl = row.querySelector(`button[data-type="attendance-day"][data-lesson-id="${lid}"]`);
                     const att = attEl ? (attEl.getAttribute('data-value') || '') : '';
-                    const hw = !!row.querySelector(`input[data-type="homework-day"][data-lesson-id="${lid}"]`).checked;
-                    const ex = (row.querySelector(`input[data-type="extra-task-day"][data-lesson-id="${lid}"]`).value || '').trim();
-                    const ts = parseInt(row.querySelector(`input[data-type="test-score-day"][data-lesson-id="${lid}"]`).value) || 0;
-                    // Only include if there's meaningful data; otherwise skip to avoid creating empty records
+
+                    const hwEl = row.querySelector(`input[data-type="homework-day"][data-lesson-id="${lid}"]`);
+                    const hw = hwEl ? !!hwEl.checked : false;
+
+                    const exEl = row.querySelector(`input[data-type="extra-task-day"][data-lesson-id="${lid}"]`);
+                    const ex = exEl ? (exEl.value || '').trim() : '';
+
+                    const tsEl = row.querySelector(`input[data-type="test-score-day"][data-lesson-id="${lid}"]`);
+                    const ts = tsEl ? (parseInt(tsEl.value, 10) || 0) : 0;
+
                     if (att || hw || ex !== '' || ts > 0) {
+                        payload.records[studentId] = payload.records[studentId] || {};
                         payload.records[studentId][lid] = { attendance: att, homework: hw, extra: ex, test_score: ts };
+                        foundAny = true;
                     }
                 });
+                return foundAny;
             };
-            document.querySelectorAll('tbody tr:not(.section-header):not(.placeholder-row)').forEach(row => {
+
+            document.querySelectorAll('tbody tr[data-real="1"]').forEach(row => {
                 const nameInput = row.querySelector('.student-name');
                 const noteInput = row.querySelector('.student-note');
+                if (!nameInput) return; // defensive
                 const sid = nameInput.getAttribute('data-student-id');
-                payload.students.push({ id: sid, name: nameInput.value, note: noteInput.value });
-                processRow(row, sid);
+                payload.students.push({ id: sid, name: nameInput.value, note: noteInput ? noteInput.value : '' });
+                try { processRow(row, sid); } catch (err) { /* continue - per-row failures should not break whole payload */ }
             });
-            // include lesson dates
+
+            // include lesson dates (safe read)
             payload.lessons = lessons.map(l => {
                 const input = document.querySelector(`input.date-input[data-lesson-id="${l.id}"]`);
-                return { id: l.id, date: input ? input.value : (l.date || null) };
+                return { id: l.id, date: input ? input.value || null : (l.date || null) };
             });
+            // Merge existing records from the loaded `records` object for students/lessons
+            try {
+                Object.keys(records || {}).forEach(sid => {
+                    // ensure string key
+                    const sidStr = String(sid);
+                    const recsForStudent = records[sid] || records[sidStr] || {};
+                    Object.keys(recsForStudent).forEach(lid => {
+                        const lidStr = String(lid);
+                        // do not overwrite values already captured from DOM (DOM takes precedence)
+                        if (!payload.records[sidStr] || !payload.records[sidStr][lidStr]) {
+                            const r = recsForStudent[lid];
+                            if (!r) return;
+                            const att = (r.attendance || '');
+                            const hw = !!r.homework;
+                            const ex = (r.extra || '').trim();
+                            const ts = parseInt(r.test_score || 0, 10) || 0;
+                            if (att || hw || ex !== '' || ts > 0) {
+                                payload.records[sidStr] = payload.records[sidStr] || {};
+                                payload.records[sidStr][lidStr] = { attendance: att, homework: hw, extra: ex, test_score: ts };
+                            }
+                        }
+                    });
+                });
+            } catch (err) { console.warn('merge records failed', err); }
+
             return payload;
         };
 
@@ -577,13 +674,22 @@
                 const btn = e.target;
                 btn.disabled = true;
                 try {
-                    const payload = buildPayload();
-                    const r = await post('/dashboard/save/', payload);
-                    if (r.ok) notify('Saqlandi', 'bg-green-600'); else notify('Xatolik saqlashda', 'bg-red-600');
-                    await fetchState();
-                } catch (err) {
-                    notify('Xatolik saqlashda', 'bg-red-600');
-                } finally {
+                        let payload;
+                        try {
+                            payload = buildPayload();
+                        } catch (err) {
+                            console.error('Failed to build payload', err);
+                            notify('Xatolik: payload qurishda', 'bg-red-600');
+                            return;
+                        }
+                        try { console.debug('Dashboard save payload', payload); } catch (err) {}
+                        const r = await post('/dashboard/save/', payload);
+                        if (r.ok) notify('Saqlandi', 'bg-green-600'); else notify('Xatolik saqlashda', 'bg-red-600');
+                        await fetchState();
+                    } catch (err) {
+                        console.error('Save failed', err);
+                        notify('Xatolik saqlashda', 'bg-red-600');
+                    } finally {
                     btn.disabled = false;
                     saving = false;
                 }
@@ -696,11 +802,14 @@
       // compute over lessons ≥ joined_at
       const stu = (Object.values(window.students||{}).flat()).find(s => String(s.id)===String(sid));
       const joinedAt = stu && stu.joined_at ? stu.joined_at : null;
+      const today = new Date().toISOString().split('T')[0];
 
       let total=0, present=0, excused=0, absent=0, hwYes=0, testSum=0;
       (window.lessons||[]).forEach(l => {
-        const applicable = !joinedAt || !l.date ? true : (l.date >= joinedAt);
+        const isNewStudent = joinedAt === today;
+        const applicable = isNewStudent || !joinedAt || !l.date ? true : (l.date >= joinedAt);
         if (!applicable) return;
+        
         total += 1;
         const rec = ((window.records||{})[stu.id]||{})[l.id] || {};
         const a = rec.attendance || '';
